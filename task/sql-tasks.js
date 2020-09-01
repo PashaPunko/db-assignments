@@ -157,13 +157,12 @@ async function task_1_7(db) {
         SELECT
             e.EmployeeID AS EmployeeId,
             CONCAT(e.FirstName, ' ', e.LastName) AS FullName,
-            IFNULL((
-                SELECT 
-                    CONCAT(FirstName, ' ', LastName) 
-                FROM Employees
-                WHERE EmployeeID=e.ReportsTo
-            ), '-') AS ReportsTo
+            IFNULL(
+                    CONCAT(r.FirstName, ' ', r.LastName) 
+                , '-') AS ReportsTo
         FROM Employees e
+		LEFT JOIN Employees r
+			ON e.ReportsTo=r.EmployeeID
         ORDER BY e.EmployeeID
     `);
     return result[0];
@@ -208,7 +207,7 @@ async function task_1_9(db) {
            CustomerID,
            ContactName
         FROM Customers
-        WHERE ContactName REGEXP '^F..n.*'
+        WHERE ContactName LIKE 'F%n%'
     `);
     return result[0];
 }
@@ -290,14 +289,10 @@ async function task_1_12(db) {
 async function task_1_13(db) {
     let result = await db.query(`
         SELECT
-            COUNT(ProductID) AS TotalOfCurrentProducts,
-            COUNT(  CASE 
-                        WHEN Discontinued 
-                        THEN 1 
-                        ELSE NULL 
-                    END) AS TotalOfDiscontinuedProducts
-            
-        FROM Products
+            (SELECT COUNT(ProductID) FROM Products) 
+				AS TotalOfCurrentProducts,
+            (SELECT COUNT(ProductID) FROM Products WHERE Discontinued)
+				AS TotalOfDiscontinuedProducts
     `);
     return result[0];
 }
@@ -331,19 +326,20 @@ async function task_1_14(db) {
 async function task_1_15(db) {
     let result = await db.query(`
         SELECT
-            SUM( IF( MONTH(OrderDate)=1 AND YEAR(OrderDate)=1997, 1, 0) ) AS January,
-            SUM( IF( MONTH(OrderDate)=2 AND YEAR(OrderDate)=1997, 1, 0) ) AS February,
-            SUM( IF( MONTH(OrderDate)=3 AND YEAR(OrderDate)=1997, 1, 0) ) AS March,
-            SUM( IF( MONTH(OrderDate)=4 AND YEAR(OrderDate)=1997, 1, 0) ) AS April,
-            SUM( IF( MONTH(OrderDate)=5 AND YEAR(OrderDate)=1997, 1, 0) ) AS May,
-            SUM( IF( MONTH(OrderDate)=6 AND YEAR(OrderDate)=1997, 1, 0) ) AS June,
-            SUM( IF( MONTH(OrderDate)=7 AND YEAR(OrderDate)=1997, 1, 0) ) AS July,
-            SUM( IF( MONTH(OrderDate)=8 AND YEAR(OrderDate)=1997, 1, 0) ) AS August,
-            SUM( IF( MONTH(OrderDate)=9 AND YEAR(OrderDate)=1997, 1, 0) ) AS September,
-            SUM( IF( MONTH(OrderDate)=10 AND YEAR(OrderDate)=1997, 1, 0) ) AS October,
-            SUM( IF( MONTH(OrderDate)=11 AND YEAR(OrderDate)=1997, 1, 0) ) AS November,
-            SUM( IF( MONTH(OrderDate)=12 AND YEAR(OrderDate)=1997, 1, 0) ) AS December
+            COUNT( IF( MONTH(OrderDate)=1, 1, NULL) ) AS January,
+            COUNT( IF( MONTH(OrderDate)=2, 1, NULL) ) AS February,
+            COUNT( IF( MONTH(OrderDate)=3, 1, NULL) ) AS March,
+            COUNT( IF( MONTH(OrderDate)=4, 1, NULL) ) AS April,
+            COUNT( IF( MONTH(OrderDate)=5, 1, NULL) ) AS May,
+            COUNT( IF( MONTH(OrderDate)=6, 1, NULL) ) AS June,
+            COUNT( IF( MONTH(OrderDate)=7, 1, NULL) ) AS July,
+            COUNT( IF( MONTH(OrderDate)=8, 1, NULL) ) AS August,
+            COUNT( IF( MONTH(OrderDate)=9, 1, NULL) ) AS September,
+            COUNT( IF( MONTH(OrderDate)=10, 1, NULL) ) AS October,
+            COUNT( IF( MONTH(OrderDate)=11, 1, NULL) ) AS November,
+            COUNT( IF( MONTH(OrderDate)=12, 1, NULL) ) AS December
         FROM Orders 
+		WHERE YEAR(OrderDate)=1997
     `);
     return result[0];
 }
@@ -388,7 +384,7 @@ async function task_1_17(db) {
             FROM Products
             GROUP BY CategoryID
             ) products
-            RIGHT JOIN Categories ON products.CategoryID=Categories.CategoryID
+            INNER JOIN Categories ON products.CategoryID=Categories.CategoryID
             ORDER BY products.Price DESC, Categories.CategoryName
     `);
     return result[0];
@@ -428,24 +424,13 @@ async function task_1_19(db) {
     SELECT
         Customers.CustomerID AS CustomerID,
         Customers.CompanyName AS CompanyName,
-        TotalAmount.TotalOrdersAmount AS 'TotalOrdersAmount, $'
-    FROM Customers
-    INNER JOIN (
-        SELECT
-            Orders.CustomerID AS CustomerID,
-            SUM(TotalOrders.TotalPrice) AS TotalOrdersAmount
-        FROM Orders
-        INNER JOIN (
-                SELECT
-                    OrderID,
-                    SUM(UnitPrice * Quantity) AS TotalPrice
-                FROM OrderDetails
-                GROUP BY OrderID
-            ) TotalOrders ON Orders.OrderId = TotalOrders.OrderID
-        GROUP BY Orders.CustomerID
-        HAVING TotalOrdersAmount>10000
-    ) TotalAmount ON TotalAmount.CustomerID=Customers.CustomerID
-    ORDER BY TotalAmount.TotalOrdersAmount DESC, CustomerID
+        SUM(OrderDetails.UnitPrice * OrderDetails.Quantity) AS 'TotalOrdersAmount, $'
+    FROM OrderDetails
+    INNER JOIN Orders ON Orders.OrderID=OrderDetails.OrderID
+	INNER JOIN Customers ON Customers.CustomerID=Orders.CustomerID
+	GROUP BY Orders.CustomerID
+	HAVING \`TotalOrdersAmount, $\`>10000
+    ORDER BY \`TotalOrdersAmount, $\` DESC, CustomerID
     `);
     return result[0];
 }
@@ -463,24 +448,13 @@ async function task_1_20(db) {
     SELECT
         Employees.EmployeeID AS EmployeeID,
         CONCAT(Employees.FirstName, ' ', Employees.LastName) AS 'Employee Full Name',
-        TotalAmount.TotalOrdersAmount AS 'Amount, $'
-    FROM Employees
-    INNER JOIN (
-        SELECT
-            Orders.EmployeeID AS EmployeeID,
-            SUM(TotalOrders.TotalPrice) AS TotalOrdersAmount
-        FROM Orders
-        INNER JOIN (
-            SELECT
-                OrderID,
-                SUM(UnitPrice * Quantity) AS TotalPrice
-            FROM OrderDetails
-            GROUP BY OrderID
-            ) TotalOrders ON Orders.OrderId = TotalOrders.OrderID
-        GROUP BY Orders.EmployeeID
-    ) TotalAmount ON TotalAmount.EmployeeID=Employees.EmployeeID
-    ORDER BY TotalAmount.TotalOrdersAmount DESC
-    LIMIT 1
+        SUM(OrderDetails.UnitPrice * OrderDetails.Quantity) AS 'Amount, $'
+    FROM OrderDetails
+    INNER JOIN Orders ON Orders.OrderID=OrderDetails.OrderID
+	INNER JOIN Employees ON Employees.EmployeeID=Orders.EmployeeID
+	GROUP BY Orders.EmployeeID
+    ORDER BY \`Amount, $\` DESC
+	LIMIT 1
     `);
     return result[0];
 }
@@ -517,34 +491,21 @@ async function task_1_22(db) {
             SELECT DISTINCT
                 Customers.CompanyName AS CompanyName,
                 Products.ProductName AS ProductName,
-                MaxCustomers.MaxPrice AS PricePerItem
+                MaxForOrders.MaxPrice AS PricePerItem
             FROM (
                 SELECT
-                    OrderID,
-                    MAX(UnitPrice) AS MaxPrice
-                FROM OrderDetails
-                GROUP BY OrderID
-            ) MaxForOrders 
-            INNER JOIN OrderDetails ON MaxForOrders.OrderID=OrderDetails.OrderID AND MaxForOrders.MaxPrice=OrderDetails.UnitPrice
-            INNER JOIN Orders ON Orders.OrderID=MaxForOrders.OrderID        
-            INNER JOIN (
-                    SELECT
-                        Orders.CustomerID,
-                        MAX(MaxProducts.MaxPrice) AS MaxPrice
-                    FROM Orders
-                    INNER JOIN (
-                        SELECT
-                            OrderID,
-                            MAX(UnitPrice) AS MaxPrice
-                        FROM OrderDetails
-                        GROUP BY OrderID
-                        ) MaxProducts ON MaxProducts.OrderID=Orders.OrderID
-                    GROUP BY CustomerID
-            ) MaxCustomers ON Orders.CustomerID=MaxCustomers.CustomerID AND MaxForOrders.MaxPrice=MaxCustomers.MaxPrice
+					Customers.CustomerID AS CustomerID,
+                    MAX(OrderDetails.UnitPrice) AS MaxPrice
+                FROM Customers
+				INNER JOIN Orders ON Orders.CustomerID=Customers.CustomerID
+				INNER JOIN OrderDetails ON Orders.OrderID=OrderDetails.OrderID
+                GROUP BY Customers.CustomerID
+            ) MaxForOrders
+			INNER JOIN Orders ON Orders.CustomerID=MaxForOrders.CustomerID
+            INNER JOIN OrderDetails ON Orders.OrderID=OrderDetails.OrderID AND MaxForOrders.MaxPrice=OrderDetails.UnitPrice       
             INNER JOIN Products ON Products.ProductID=OrderDetails.ProductID
-            INNER JOIN Customers ON MaxCustomers.CustomerID=Customers.CustomerID
-            ORDER BY MaxCustomers.MaxPrice DESC, Customers.CompanyName, Products.ProductName
-                        
+            INNER JOIN Customers ON MaxForOrders.CustomerID=Customers.CustomerID
+            ORDER BY MaxForOrders.MaxPrice DESC, Customers.CompanyName, Products.ProductName            
     `);
     return result[0];
 }               
