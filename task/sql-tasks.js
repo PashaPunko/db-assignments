@@ -207,7 +207,7 @@ async function task_1_9(db) {
            CustomerID,
            ContactName
         FROM Customers
-        WHERE ContactName LIKE 'F%n%'
+        WHERE ContactName LIKE 'F__n%'
     `);
     return result[0];
 }
@@ -376,16 +376,11 @@ async function task_1_17(db) {
     let result = await db.query(`
         SELECT
            Categories.CategoryName AS CategoryName,
-           products.Price AS AvgPrice
-        FROM (
-            SELECT
-                CategoryID,
-                AVG(UnitPrice) AS Price
-            FROM Products
-            GROUP BY CategoryID
-            ) products
-            INNER JOIN Categories ON products.CategoryID=Categories.CategoryID
-            ORDER BY products.Price DESC, Categories.CategoryName
+           AVG(Products.UnitPrice) AS AvgPrice
+        FROM  Products
+        INNER JOIN Categories ON products.CategoryID=Categories.CategoryID
+		GROUP BY Categories.CategoryName
+        ORDER BY AvgPrice DESC, CategoryName
     `);
     return result[0];
 }
@@ -502,7 +497,7 @@ async function task_1_22(db) {
                 GROUP BY Customers.CustomerID
             ) MaxForOrders
 			INNER JOIN Orders ON Orders.CustomerID=MaxForOrders.CustomerID
-            INNER JOIN OrderDetails ON Orders.OrderID=OrderDetails.OrderID AND MaxForOrders.MaxPrice=OrderDetails.UnitPrice       
+			INNER JOIN OrderDetails ON Orders.OrderID=OrderDetails.OrderID AND MaxForOrders.MaxPrice=OrderDetails.UnitPrice       
             INNER JOIN Products ON Products.ProductID=OrderDetails.ProductID
             INNER JOIN Customers ON MaxForOrders.CustomerID=Customers.CustomerID
             ORDER BY MaxForOrders.MaxPrice DESC, Customers.CompanyName, Products.ProductName            
