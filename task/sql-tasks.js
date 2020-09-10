@@ -378,7 +378,7 @@ async function task_1_17(db) {
            Categories.CategoryName AS CategoryName,
            AVG(Products.UnitPrice) AS AvgPrice
         FROM  Products
-        INNER JOIN Categories ON products.CategoryID=Categories.CategoryID
+        INNER JOIN Categories ON Products.CategoryID=Categories.CategoryID
 		GROUP BY Categories.CategoryName
         ORDER BY AvgPrice DESC, CategoryName
     `);
