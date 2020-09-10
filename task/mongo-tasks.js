@@ -22,6 +22,12 @@
  * */
 async function before(db) {
     await db.collection('employees').ensureIndex({CustomerID: 1});
+	await db.collection('orders').createIndex({ OrderID: 1 });
+    await db.collection('orders').createIndex({ CustomerID: 1 });
+    await db.collection('order-details').createIndex({ OrderID: 1 });
+    await db.collection('customers').createIndex({ CustomerID: 1 });
+    await db.collection('products').createIndex({ ProductID: 1 });
+    await db.collection('order-details').createIndex({ ProductID: 1 });
 }
 
 /**
@@ -675,39 +681,26 @@ async function task_1_22(db) {
 		{
 			$lookup: {
 				from: "order-details",
-				let:{orderID:"$OrderID"},
-				pipeline: [
-					{$sort: {"UnitPrice":-1}},
-					{
-						
-						$group: {
-							_id:"$OrderID",
-							productID:{$first:"$ProductID"},
-							maxPrice: {$max:"$UnitPrice"}
-						}
-					},
-					{$match:
-						{ $expr:
-							{ $and:
-							   [
-								{ $eq: [ "$_id",  "$$orderID" ] }
-							   ]
-							}
-						 }
-					},
-				],
+				localField: "OrderID",
+				foreignField: "OrderID",
 				as: "OrderWithMax"
 			}
 		},
-		
-		
 		{$unwind: "$OrderWithMax"},
-		{$sort: {"OrderWithMax.maxPrice":-1}},
+		{$sort: {"OrderWithMax.UnitPrice":-1}},
+		{ 
+			$project: {
+				_id: 0, 
+				CustomerID: 1,
+				"OrderWithMax.ProductID": 1, 
+				"OrderWithMax.UnitPrice": 1
+			}	
+		},
 		{
 			$group: {
 				_id:"$CustomerID",
-				productID:{$first:"$OrderWithMax.productID"},
-				maxPrice: {$max:"$OrderWithMax.maxPrice"}
+				productID:{$first:"$OrderWithMax.ProductID"},
+				maxPrice: {$max:"$OrderWithMax.UnitPrice"}
 			}
 		},
 		{
